@@ -32,17 +32,19 @@ const GameBoard = (props) => {
   
    //laser variables
    let LaserMax = 10 // max number of lasers on screen at once
+   let LaserDist = 0.6 // max distance lasers can travel as fraction of screen width
    let LaserSpeed = 500; // speed of lasers in pixels/sec
    let ShipCanShoot = true;
    let Lasers = [];
 
-  const shootLaser = () => {
+  const shootLaser = (Lasers) => {
     if(ShipCanShoot && Lasers.length < LaserMax){
       Lasers.push({
         x: ShipX + 4/3 * ShipSize * Math.cos(ShipAngle),
         y: ShipY - 4/3 * ShipSize * Math.sin(ShipAngle),
         xv: LaserSpeed * Math.cos(ShipAngle) / 30,
-        yv: LaserSpeed * Math.sin(ShipAngle) / 30
+        yv: -LaserSpeed * Math.sin(ShipAngle) / 30,
+        dist: 0
       })
       ShipCanShoot = false;
     }
@@ -178,12 +180,62 @@ const GameBoard = (props) => {
     ctx.fillRect(ship.x - 1, ship.y - 1, 2, 2)
     }
 
+      //move the lasers
+      for (let laser of Lasers){
+        //check distance travelled
+        if(laser.dist > LaserDist *  canvas.width){
+          Lasers.splice(laser, 1)
+          continue;
+        }
+        //move the laser
+        laser.x += laser.xv;
+        laser.y += laser.yv;
+        //calculate the distance travelled
+        laser.dist += Math.sqrt(Math.pow(laser.xv, 2) + Math.pow(laser.yv,2))
+        //Handle edge of screen
+        if(laser.x < 0) {
+          laser.x = canvas.width;
+        } else if (laser.x > canvas.width){
+          laser.x = 0
+        }
+        if(laser.y < 0) {
+          laser.y = canvas.height;
+        } else if (laser.y > canvas.height){
+          laser.y = 0
+        }
+
+      }
     //draw the lasers
     for(let i = 0; i < Lasers.length; i++){
       ctx.fillStyle = 'white';
       ctx.beginPath();
       ctx.arc(Lasers[i].x, Lasers[i].y, ShipSize / 15, 0, Math.PI * 2, false);
       ctx.fill();
+    }
+    //detect laser hits on asteroids
+    var ax, ay, ar, lx, ly;
+    for (var i = Asteroids.length - 1; i >= 0; i--){
+      //grab the asteroid properties
+      ax = Asteroids[i].x;
+      ay = Asteroids[i].y;
+      ar = Asteroids[i].r;
+      
+      //loop over the lasers
+      for(var j = Lasers.length - 1; j >=0; j--){
+        //grab the laser properties
+        lx = Lasers[j].x;
+        ly = Lasers[j].y;
+
+        // detect hits
+        if (distBetweenPoints(ax, ay, lx, ly) < ar){
+          // remove the laser
+          Lasers.splice(j,1);
+
+          // remove the asteroid
+          Asteroids.splice(i, 1);
+          break;
+        }
+      }
     }
     
 
@@ -226,11 +278,7 @@ const GameBoard = (props) => {
       }
     }
     
-    //move the lasers
-    for (let i = 0; i < Lasers; i++){
-      Lasers[i].x += Lasers[i].xv;
-      Lasers[i].y += Lasers[i].yv;
-    }
+  
 
     // DrawAsteroids
     
@@ -292,8 +340,7 @@ const GameBoard = (props) => {
     switch(e.keyCode){
       //Shoot laser (space bar)
       case 32:
-        console.log(Lasers)
-        shootLaser();
+        shootLaser(Lasers);
       //rotate ship left (a)
       break;
       case 65:
