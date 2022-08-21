@@ -28,13 +28,15 @@ const GameBoard = (props) => {
   let AsteroidSize = 100; // starting size of asteroids in pixels
   let AsteroidVert = 10; // average number of verticies on each asteroid
   const AsteroidJag = 0.3; // jaggedness of asteroids from (0 = none and 1 = lots)
-  const StartingRoids = 10;
+  const StartingRoids = 3;
   
    //laser variables
-   let LaserMax = 10 // max number of lasers on screen at once
-   let LaserDist = 0.6 // max distance lasers can travel as fraction of screen width
-   let LaserSpeed = 500; // speed of lasers in pixels/sec
-   let ShipCanShoot = true;
+  let LaserMax = 10 // max number of lasers on screen at once
+  let LaserDist = 0.4 // max distance lasers can travel as fraction of screen width
+  let LaserSpeed = 500; // speed of lasers in pixels/sec
+  let ShipCanShoot = true;
+  let LaserExplodeDur = 0.15; //duration of the lasers explosion
+
    let Lasers = [];
 
   const shootLaser = (Lasers) => {
@@ -44,13 +46,14 @@ const GameBoard = (props) => {
         y: ShipY - 4/3 * ShipSize * Math.sin(ShipAngle),
         xv: LaserSpeed * Math.cos(ShipAngle) / 30,
         yv: -LaserSpeed * Math.sin(ShipAngle) / 30,
-        dist: 0
+        dist: 0,
+        explodeTime: 0
       })
       ShipCanShoot = false;
     }
   }
  
-  const update = (ctx, frameCount, ship, Asteroids, canvas, distBetweenPoints, newShip) => {
+  const update = (ctx, frameCount, ship, Asteroids, canvas, distBetweenPoints, destroyAsteroid) => {
     let blinkOn = ShipBlinkNum % 2 === 0;
     let exploding = ship.explodeTime > 0
     ShipX = ship.x;
@@ -71,7 +74,7 @@ const GameBoard = (props) => {
     //draw the thruster
       if(!exploding && blinkOn){
         ctx.fillStyle = 'blue'
-        ctx.strokeStyle = 'orange'
+        ctx.strokeStyle = 'darkRed'
         ctx.lineWidth = ShipSize / 10;
         ctx.beginPath();
         ctx.moveTo( // rear left
@@ -180,18 +183,29 @@ const GameBoard = (props) => {
     ctx.fillRect(ship.x - 1, ship.y - 1, 2, 2)
     }
 
-      //move the lasers
+      //check distance travelled
       for (let laser of Lasers){
         //check distance travelled
         if(laser.dist > LaserDist *  canvas.width){
           Lasers.splice(laser, 1)
           continue;
         }
-        //move the laser
-        laser.x += laser.xv;
-        laser.y += laser.yv;
-        //calculate the distance travelled
-        laser.dist += Math.sqrt(Math.pow(laser.xv, 2) + Math.pow(laser.yv,2))
+
+        // handle the explosion
+        if (laser.explodeTime > 0){
+          laser.explodeTime--;
+          //destroy the laser after the duration is up
+          if(laser.explodeTime === 0){
+            Lasers.splice(laser, 1);
+            continue;
+          }
+        } else {
+          //move the laser
+          laser.x += laser.xv;
+          laser.y += laser.yv;
+          //calculate the distance travelled
+          laser.dist += Math.sqrt(Math.pow(laser.xv, 2) + Math.pow(laser.yv,2));
+        }
         //Handle edge of screen
         if(laser.x < 0) {
           laser.x = canvas.width;
@@ -207,10 +221,26 @@ const GameBoard = (props) => {
       }
     //draw the lasers
     for(let i = 0; i < Lasers.length; i++){
+      if (Lasers[i].explodeTime === 0){
       ctx.fillStyle = 'white';
       ctx.beginPath();
       ctx.arc(Lasers[i].x, Lasers[i].y, ShipSize / 15, 0, Math.PI * 2, false);
       ctx.fill();
+      } else {
+        //draw the explosion
+      ctx.fillStyle = 'darkBlue';
+      ctx.beginPath();
+      ctx.arc(Lasers[i].x, Lasers[i].y, ship.r * 0.75, 0, Math.PI * 2, false);
+      ctx.fill();
+      ctx.fillStyle = 'blue';
+      ctx.beginPath();
+      ctx.arc(Lasers[i].x, Lasers[i].y, ship.r * 0.5, 0, Math.PI * 2, false);
+      ctx.fill();
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(Lasers[i].x, Lasers[i].y, ship.r * 0.25, 0, Math.PI * 2, false);
+      ctx.fill();
+      }
     }
     //detect laser hits on asteroids
     var ax, ay, ar, lx, ly;
@@ -221,18 +251,16 @@ const GameBoard = (props) => {
       ar = Asteroids[i].r;
       
       //loop over the lasers
-      for(var j = Lasers.length - 1; j >=0; j--){
+      for(var j = Lasers.length - 1; j >= 0; j--){
         //grab the laser properties
         lx = Lasers[j].x;
         ly = Lasers[j].y;
 
         // detect hits
-        if (distBetweenPoints(ax, ay, lx, ly) < ar){
-          // remove the laser
-          Lasers.splice(j,1);
-
-          // remove the asteroid
-          Asteroids.splice(i, 1);
+        if (Lasers[j].explodeTime === 0 && distBetweenPoints(ax, ay, lx, ly) < ar){
+          //destroy the asteroid and activate laser explosion
+          destroyAsteroid(i);
+          Lasers[j].explodeTime = Math.ceil(LaserExplodeDur * 30)
           break;
         }
       }
@@ -245,6 +273,8 @@ const GameBoard = (props) => {
         for(let i = 0; i < Asteroids.length; i++){
           if (distBetweenPoints(ship.x, ship.y, Asteroids[i].x, Asteroids[i].y) < ship.r + Asteroids[i].r){
             explodeShip();
+            destroyAsteroid(i);
+            break;
           }
         }
       }
@@ -277,8 +307,6 @@ const GameBoard = (props) => {
         }
       }
     }
-    
-  
 
     // DrawAsteroids
     
@@ -417,13 +445,13 @@ const GameBoard = (props) => {
     canvas.style.width = rect.width + "px";
     canvas.style.height = rect.height + "px";
    
-    let newAsteroid = (x, y) => {
+    let newAsteroid = (x, y, r) => {
       let newRoid = {
           x: x,
           y: y,
           xv: Math.random() * AsteroidSpeed / 30 * (Math.random() < 0.5 ? 1 : -1), //x velocity
           yv: Math.random() * AsteroidSpeed / 30 * (Math.random() < 0.5 ? 1 : -1), //y velocity
-          r: AsteroidSize / 2, //radius
+          r: r, //radius
           a: Math.random() * Math.PI * 2, // random angle in radians (this is same as 360 degrees)
           vert: Math.floor(Math.random() * (AsteroidVert + 1) + AsteroidVert / 2),
           offs: []
@@ -449,10 +477,31 @@ const GameBoard = (props) => {
           x = Math.floor(Math.random() * canvas.width);
           y = Math.floor(Math.random() * canvas.height);
         }while (distBetweenPoints(ship.x, ship.y, x, y) < AsteroidSize * 2 + ship.r){
-          Asteroids.push(newAsteroid(x, y));
+          Asteroids.push(newAsteroid(x, y, Math.ceil(AsteroidSize / 2)));
         }
       }
     }
+
+    const destroyAsteroid = (index) => {
+      let x = Asteroids[index].x;
+      let y = Asteroids[index].y;
+      let r = Asteroids[index].r;
+
+      //split the asteroid in two
+      if (r === Math.ceil(AsteroidSize / 2)){
+        Asteroids.push(newAsteroid(x, y, Math.ceil(AsteroidSize / 4)))
+        console.log('medium', Asteroids)
+        Asteroids.push(newAsteroid(x, y, Math.ceil(AsteroidSize / 4)))
+      } else if (r === Math.ceil(AsteroidSize / 4)) {
+        console.log('small')
+        Asteroids.push(newAsteroid(x, y, Math.ceil(AsteroidSize / 8)))
+        Asteroids.push(newAsteroid(x, y, Math.ceil(AsteroidSize / 8)))
+      }
+
+      //destroy the asteroid
+      Asteroids.splice(index, 1)
+    }
+
     createBelt();
     
     let frameCount = 0
@@ -460,7 +509,7 @@ const GameBoard = (props) => {
 
     const render= () => {
       frameCount = frameCount + 30;
-      update(context, frameCount, ship, Asteroids, canvas, distBetweenPoints, newShip)
+      update(context, frameCount, ship, Asteroids, canvas, distBetweenPoints, destroyAsteroid)
       animationFrameId= window.requestAnimationFrame(render)
     }
     render()
