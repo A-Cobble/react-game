@@ -13,9 +13,9 @@ const GameBoard = (props) => {
   let TextFadeTime = 2.5; // text fade time in seconds
   let TextSize = 60; // text font height in pixels
   let GameLives = 3; // starting number of lives
-  let LgeRoidPts = 20; // points scored for a medium asteroid
+  let LgeRoidPts = 20; // points scored for a large asteroid
   let MedRoidPts = 50; // points scored for a medium asteroid
-  let SmlRoidPts = 100; // points scored for a medium asteroid
+  let SmlRoidPts = 100; // points scored for a small asteroid
   let SaveKeyScore = 'highscore'; //save key for local storage of high score
   const SoundOn = true;
   const MusicOn = true;
@@ -50,7 +50,7 @@ const GameBoard = (props) => {
   
    //laser variables
   let LaserMax = 10 // max number of lasers on screen at once
-  let LaserDist = 0.4 // max distance lasers can travel as fraction of screen width
+  let LaserDist = 0.5 // max distance lasers can travel as fraction of screen width
   let LaserSpeed = 500; // speed of lasers in pixels/sec
   let ShipCanShoot = true;
   let LaserExplodeDur = 0.15; //duration of the lasers explosion
@@ -199,7 +199,6 @@ const GameBoard = (props) => {
       ship.dead = true;
       text = 'Game Over';
       textAlpha = 1.0;
-      // TO DO game over
     }
 
     const drawShip = (x, y, a, color = 'white') => {
@@ -447,9 +446,7 @@ const GameBoard = (props) => {
     }
 
     // DrawAsteroids
-    
     let x, y, r, a, vert, offs;
-    
     for(let i = 0; i < Asteroids.length; i++){
       ctx.strokeStyle = 'slategrey';
       ctx.lineWidth = ShipSize / 15;
@@ -483,8 +480,8 @@ const GameBoard = (props) => {
         ctx.arc(x, y, r, 0, Math.PI *2, false);
         ctx.stroke();
       }
-      //move the asteroid
     }
+    //move the asteroid
     for(let i = 0; i < Asteroids.length; i++){
       Asteroids[i].x += Asteroids[i].xv;
       Asteroids[i].y += Asteroids[i].yv;
@@ -510,17 +507,26 @@ const GameBoard = (props) => {
         //Shoot laser (space bar)
         case 32:
           shootLaser(Lasers);
+          break;
         //rotate ship left (a)
-        break;
         case 65:
+          ShipRot = TurnSpeed / 180 * Math.PI / 30
+        break;
+        case 37:
           ShipRot = TurnSpeed / 180 * Math.PI / 30
         break;
         //rotate ship right (d)
         case 68:
           ShipRot = -TurnSpeed / 180 * Math.PI / 30
         break;
+        case 39:
+          ShipRot = -TurnSpeed / 180 * Math.PI / 30
+        break;
         //Thrust (w)
         case 87:
+          Thrusting = true;
+        break;
+        case 38:
           Thrusting = true;
         break;
         //default case?
@@ -542,12 +548,21 @@ const GameBoard = (props) => {
         case 65:
           ShipRot = 0
         break;
+        case 37:
+          ShipRot = 0
+        break;
         //rotate ship right
         case 68:
           ShipRot = 0
         break;
+        case 39:
+          ShipRot = 0
+        break;
         //Thrust
         case 87:
+          Thrusting = false
+        break;
+        case 38:
           Thrusting = false
         break;
         //default case
@@ -654,6 +669,7 @@ const GameBoard = (props) => {
         localStorage.setItem(SaveKeyScore, highScore)
       }
 
+      
       //destroy the asteroid
       Asteroids.splice(index, 1);
       fxHit.play();
